@@ -34,7 +34,7 @@ export async function handlerUploadThumbnail(cfg: ApiConfig, req: BunRequest) {
   }
 
 
-  // Retrieve video
+  // Retrieve video in DB
   const videoData = await getVideo(cfg.db, videoId)
   if( videoData?.userID !== userID ){
     throw new UserForbiddenError("Invalid video user")
@@ -42,6 +42,10 @@ export async function handlerUploadThumbnail(cfg: ApiConfig, req: BunRequest) {
 
   // Prepare values to update
   const mediaType = file.type
+  if( !["image/png", 'image/jpeg'].includes( mediaType )){
+    throw new BadRequestError("Invalid file extension")
+  }
+
   const mediaBuffer = await file.arrayBuffer()
   
   // Prepare file path
