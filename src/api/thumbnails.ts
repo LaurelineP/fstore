@@ -1,3 +1,4 @@
+import path from 'path'
 import { getBearerToken, validateJWT } from "../auth";
 import { respondWithJSON } from "./json";
 import { getVideo, updateVideo } from "../db/videos";
@@ -32,11 +33,6 @@ export async function handlerUploadThumbnail(cfg: ApiConfig, req: BunRequest) {
     throw new BadRequestError('Invalid file size')
   }
 
-  // Prepare values to update
-  const mediaType = file.type
-  const mediaBuffer = Buffer.from(await file.arrayBuffer()).toString("base64")
-  const dataBufferUrl = `data:${mediaType};base64,${mediaBuffer}`
-
 
   // Retrieve video
   const videoData = await getVideo(cfg.db, videoId)
@@ -44,11 +40,21 @@ export async function handlerUploadThumbnail(cfg: ApiConfig, req: BunRequest) {
     throw new UserForbiddenError("Invalid video user")
   }
 
+  // Prepare values to update
+  const mediaType = file.type
+  const mediaBuffer = await file.arrayBuffer()
+  
+  // Prepare file path
+  const fileExtension = mediaType.split('/')[1]
+  const thumbnailPath = path.join(cfg.assetsRoot,`${videoId}.${fileExtension}`)
+
+  // Store in file system
+  await Bun.write(thumbnailPath, mediaBuffer)
+
   // Thumbnail URL updated
-  const thumbnailURL = dataBufferUrl
   const videoUpdates = {
     ...videoData,
-    thumbnailURL
+    thumbnailURL: `http://localhost:${cfg.port}/${thumbnailPath}`
   }
   await updateVideo(cfg.db, videoUpdates)
 
