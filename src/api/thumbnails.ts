@@ -1,9 +1,9 @@
 import { getBearerToken, validateJWT } from "../auth";
 import { respondWithJSON } from "./json";
-import { getVideo } from "../db/videos";
+import { getVideo, updateVideo } from "../db/videos";
 import type { ApiConfig } from "../config";
 import type { BunRequest } from "bun";
-import { BadRequestError, NotFoundError } from "./errors";
+import { BadRequestError, NotFoundError, UserForbiddenError } from "./errors";
 
 type Thumbnail = {
   data: ArrayBuffer;
@@ -47,7 +47,44 @@ export async function handlerUploadThumbnail(cfg: ApiConfig, req: BunRequest) {
 
   console.log("uploading thumbnail for video", videoId, "by user", userID);
 
-  // TODO: implement the upload here
+  const reqFormData = await req.formData()
+  const file = reqFormData.get('thumbnail')
+  if ( !(file instanceof File) ){
+    throw new BadRequestError('Invalid file thumbnail')
+  }
 
-  return respondWithJSON(200, null);
+  // Validating file size
+  const MAX_UPLOAD_SIZE = 10 << 20
+  const mediaSize = Number(reqFormData.get('size'))
+  
+  if( mediaSize > MAX_UPLOAD_SIZE){
+    throw new BadRequestError('Invalid file size')
+  }
+
+  // Prepare values to update
+  const mediaType = file.type
+  const mediaBuffer = await file.arrayBuffer()
+
+
+  // Retrieve video
+  const videoData = await getVideo(cfg.db, videoId)
+  if( videoData?.userID !== userID ){
+    throw new UserForbiddenError("Invalid video user")
+  }
+
+  // Updates video in cache
+  videoThumbnails.set(videoData.id, {
+    data: mediaBuffer,
+    mediaType: mediaType
+  })
+
+  // Thumbnail URL updated
+  const thumbnailURL = `http://localhost:${cfg.port}/api/thumbnails/${videoData.id}`
+  const videoUpdates = {
+    ...videoData,
+    thumbnailURL
+  }
+  await updateVideo(cfg.db, videoUpdates)
+
+  return respondWithJSON(200, { video: videoUpdates });
 }
