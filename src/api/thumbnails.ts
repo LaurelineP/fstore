@@ -6,6 +6,7 @@ import { BadRequestError, UserForbiddenError } from "./errors";
 
 import type { ApiConfig } from "../config";
 import type { BunRequest } from "bun";
+import { randomBytes } from 'crypto';
 
 
 export async function handlerUploadThumbnail(cfg: ApiConfig, req: BunRequest) {
@@ -27,8 +28,8 @@ export async function handlerUploadThumbnail(cfg: ApiConfig, req: BunRequest) {
 
   // Validating file size
   const MAX_UPLOAD_SIZE = 10 << 20
-  const mediaSize = Number(reqFormData.get('size'))
-  
+  const mediaSize = file.size
+
   if( mediaSize > MAX_UPLOAD_SIZE){
     throw new BadRequestError('Invalid file size')
   }
@@ -50,7 +51,8 @@ export async function handlerUploadThumbnail(cfg: ApiConfig, req: BunRequest) {
   
   // Prepare file path
   const fileExtension = mediaType.split('/')[1]
-  const thumbnailPath = path.join(cfg.assetsRoot,`${videoId}.${fileExtension}`)
+  const randomThumbnailName = await randomBytes(32).toString('base64url')
+  const thumbnailPath = path.join(cfg.assetsRoot,`${randomThumbnailName}.${fileExtension}`)
 
   // Store in file system
   await Bun.write(thumbnailPath, mediaBuffer)
