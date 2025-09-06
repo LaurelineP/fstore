@@ -38,7 +38,7 @@ export async function handlerUploadThumbnail(cfg: ApiConfig, req: BunRequest) {
   // Retrieve video in DB
   const videoData = await getVideo(cfg.db, videoId)
   if( videoData?.userID !== userID ){
-    throw new UserForbiddenError("Invalid video user")
+    throw new UserForbiddenError("Invalid user's video")
   }
 
   // Prepare values to update
@@ -47,7 +47,7 @@ export async function handlerUploadThumbnail(cfg: ApiConfig, req: BunRequest) {
     throw new BadRequestError("Invalid file extension")
   }
 
-  const mediaBuffer = await file.arrayBuffer()
+  const thumbnailBuffer = await file.arrayBuffer()
   
   // Prepare file path
   const fileExtension = mediaType.split('/')[1]
@@ -55,7 +55,7 @@ export async function handlerUploadThumbnail(cfg: ApiConfig, req: BunRequest) {
   const thumbnailPath = path.join(cfg.assetsRoot,`${randomThumbnailName}.${fileExtension}`)
 
   // Store in file system
-  await Bun.write(thumbnailPath, mediaBuffer)
+  await Bun.write(thumbnailPath, thumbnailBuffer)
 
   // Thumbnail URL updated
   const videoUpdates = {
