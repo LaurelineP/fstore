@@ -13,7 +13,7 @@ FStore can run in two modes:
 
     - Run with: `pnpm dev:local`
     - Requires: 
-        - `.envrc` → sets up the AWS shim to point to LocalStack
+        - `dev/.envrc` → sets up the AWS shim to point to LocalStack
         - `.env.local` → local environment file
 
 
@@ -58,4 +58,5 @@ The inner `<HOME>/aws-shim/aws` will execute the aws binary file with extra argu
 
 - Instead of AWS S3 URIs, the emulator provides a mounted endpoint.
 
-- The `.envrc` makes sure your aws command is redirected correctly when running locally.
+- The `dev/.envrc` makes sure your aws command is redirected correctly when running locally.
+[see](./dev/.envrc)
