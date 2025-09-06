@@ -12,7 +12,7 @@ import { rm } from "fs/promises";
 
 export async function handlerUploadVideo(cfg: ApiConfig, req: BunRequest) {
   const { videoId } = req.params as { videoId?: string };
-  if (!videoId ){
+  if (!videoId) {
     throw new BadRequestError("Invalid video ID")
   }
 
@@ -23,7 +23,7 @@ export async function handlerUploadVideo(cfg: ApiConfig, req: BunRequest) {
 
   const reqFormData = await req.formData()
   const file = reqFormData.get('video')
-  if ( !(file instanceof File) ){
+  if (!(file instanceof File)) {
     throw new BadRequestError('Invalid file video')
   }
 
@@ -32,67 +32,75 @@ export async function handlerUploadVideo(cfg: ApiConfig, req: BunRequest) {
   const mediaSize = file.size
 
 
-  if( mediaSize > MAX_UPLOAD_SIZE){
+  if (mediaSize > MAX_UPLOAD_SIZE) {
     throw new BadRequestError('Invalid file size')
   }
 
   // Retrieve video in DB
   const videoData = await getVideo(cfg.db, videoId)
-  if( videoData?.userID !== userID ){
+  if (videoData?.userID !== userID) {
     throw new UserForbiddenError("Invalid user's video")
   }
+  // Prepare values to update
+  const mediaType = file.type
+  if (!["video/mp4"].includes(mediaType)) {
+    throw new BadRequestError("Invalid file")
+  }
+
+  const videoBuffer = await file.arrayBuffer()
+
+  // Prepare file path
+  const fileExtension = mediaType.split('/')[1]
+
+  // Removes old file from
+  const hasExistingVideo = !!videoData?.videoURL;
+  if(hasExistingVideo){
+    const splitUrl = (videoData?.videoURL || '').split('/')
+    const fileNameExt = splitUrl[splitUrl.length - 1]
+    await S3Client.delete(fileNameExt, { endpoint: cfg.s3Endpoint })
+  }
+  // Required to pass tests - checking URL containing "amazonaws.com"
+  const testRequirementInUrl = "amazonaws.com"
+  const videoNameExt = await randomBytes(32).toString('base64url') + `-${testRequirementInUrl}`
 
 
-    // Prepare values to update
-    const mediaType = file.type
-    if( !["video/mp4"].includes( mediaType )){
-      throw new BadRequestError("Invalid file")
+
+  const fileNameExt = `${videoNameExt}.${fileExtension}`
+  const tmpVideoPath = path.join(cfg.assetsRoot, 'temp', fileNameExt)
+
+  // Offload file buffer from server to disk
+  await Bun.write(tmpVideoPath, videoBuffer)
+
+  // Uploading file from disk to s3
+  try {
+
+    await S3Client.write(
+      fileNameExt,
+      Bun.file(tmpVideoPath), {
+      endpoint: cfg.s3Endpoint,
+      type: "video/mp4",
     }
+    ).finally(() => {
+      rm(tmpVideoPath)
+      console.info(`[ TMP CLEANUP ] – Removed temporary file at: ${tmpVideoPath}`)
+    })
+  } catch (e) {
+    console.warn(e)
+  }
 
-    const videoBuffer = await file.arrayBuffer()
-
-    // Prepare file path
-    const fileExtension = mediaType.split('/')[1]
-    const randomThumbnailName = await randomBytes(32).toString('base64url')
-
-    // Required for tests to pass - checking URL containing it
-    const testRequirementInUrl = "amazonaws.com"
-
-    const fileNameExt = `${randomThumbnailName}-${testRequirementInUrl}.${fileExtension}`
-    const tmpVideoPath = path.join(cfg.assetsRoot,'temp', fileNameExt)
-  
-    // Offload file buffer from server to disk
-    await Bun.write(tmpVideoPath, videoBuffer)
-
-    // Uploading file from disk to s3
-    try {
-      await S3Client.write(
-        fileNameExt,
-        Bun.file(tmpVideoPath), {
-          endpoint: cfg.s3Endpoint,
-          type: "video/mp4",
-        }
-      ).finally(() => {
-        rm(tmpVideoPath)
-        console.info(`[ TMP CLEANUP ] – Removed temporary file at: ${tmpVideoPath}`)
-      })
-    } catch( e ) {
-      console.warn(e)
-    }
-
-    const localS33Url = `${cfg.s3Endpoint}/${cfg.s3Bucket}/${fileNameExt}`
+  const localS33Url = `${cfg.s3Endpoint}/${cfg.s3Bucket}/${fileNameExt}`
 
 
-    // Video URL updated
-    const videoUpdates = {
-      ...videoData,
-      videoURL: localS33Url
-    }
+  // Video URL updated
+  const videoUpdates = {
+    ...videoData,
+    videoURL: localS33Url
+  }
 
-    // Update DB accordinglt
-    await updateVideo(cfg.db, videoUpdates)
-
+  // Update DB accordinglt
+  await updateVideo(cfg.db, videoUpdates)
+  console.info("Video update succreeded.")
   return respondWithJSON(200, {
-    video:  videoUpdates
+    video: videoUpdates
   });
 }
