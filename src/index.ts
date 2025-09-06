@@ -55,7 +55,7 @@ Bun.serve({
       POST: withConfig(cfg, handlerReset),
     },
   },
-
+  
   async fetch(req) {
     const url = new URL(req.url);
     const path = url.pathname;
@@ -73,8 +73,21 @@ Bun.serve({
     return errorHandlingMiddleware(cfg, err);
   },
 });
+console.info( `
+--------------------------------------------------------------------------
+--------------------------------------------------------------------------
+  
 
-console.log(`Server running at http://localhost:${cfg.port}`);
+  [ MODE ]          "${cfg.mode}"
+  [ SERVER ]        Server running at:     http://localhost:${cfg.port}
+  [ CLOUD SERVER ]  Cloud served from:     ${cfg.s3Endpoint}
+  
+
+--------------------------------------------------------------------------
+--------------------------------------------------------------------------
+
+`);
+
 
 async function serveStaticFile(relativePath: string, basePath: string) {
   const filePath = `${basePath}/${relativePath}`;
