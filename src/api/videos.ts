@@ -70,17 +70,19 @@ export async function handlerUploadVideo(cfg: ApiConfig, req: BunRequest) {
 
   // Offload file buffer from server to disk
   await Bun.write(tmpVideoPath, videoBuffer)
+  const aspectRatioLabel = await getVideoMetada(tmpVideoPath)
 
-  // Uploading file from disk to s3
+  
+  // Uploads file from disk to s3
   try {
-
+    const s3FilePath = `${aspectRatioLabel}/${fileNameExt}`
     await S3Client.write(
-      fileNameExt,
+      s3FilePath,
       Bun.file(tmpVideoPath), {
-      endpoint: cfg.s3Endpoint,
-      type: "video/mp4",
-    }
-    ).finally(() => {
+        endpoint: cfg.s3Endpoint,
+        type: "video/mp4",
+      }
+    ).finally(async() => {
       rm(tmpVideoPath)
       console.info(`[ TMP CLEANUP ] – Removed temporary file at: ${tmpVideoPath}`)
     })
@@ -88,13 +90,15 @@ export async function handlerUploadVideo(cfg: ApiConfig, req: BunRequest) {
     console.warn(e)
   }
 
-  const localS33Url = `${cfg.s3Endpoint}/${cfg.s3Bucket}/${fileNameExt}`
+  
+
+  const localS33Url = `${cfg.s3Endpoint}/${cfg.s3Bucket}/${aspectRatioLabel}/${fileNameExt}`
 
 
   // Video URL updated
   const videoUpdates = {
     ...videoData,
-    videoURL: localS33Url
+    videoURL: localS33Url,
   }
 
   // Update DB accordinglt
@@ -103,4 +107,39 @@ export async function handlerUploadVideo(cfg: ApiConfig, req: BunRequest) {
   return respondWithJSON(200, {
     video: videoUpdates
   });
+}
+
+export async function getVideoMetada(filepath: string){
+  const ffprobeProcess = Bun.spawn({
+    cmd: ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height", "-of", "json", filepath],
+    stdout: "pipe",
+    stderr: "pipe"
+  })
+
+   
+
+  const outputData = await new Response(ffprobeProcess.stdout).json();
+  const errorText = await new Response(ffprobeProcess.stderr).text();
+  const processExitCode = await ffprobeProcess.exited;
+
+  if(processExitCode !== 0 ){
+    console.error(`[ FFProbe ] Spawned process error.\n${errorText}`) 
+  }
+
+  // Gets hight and width
+  const height = outputData.streams[0].height
+  const width = outputData.streams[0].width
+
+  // Calculate ratio
+  
+  const ratioValue = Number(width/height).toPrecision(3)
+
+  const is16_9 = Number(16/9).toPrecision(3) === ratioValue
+  const is9_16 = Number(9/16).toPrecision(3) === ratioValue
+  const storageName = is16_9
+    ? 'landscape'
+    : is9_16
+      ? 'portrait' : 'other';
+
+  return storageName
 }
