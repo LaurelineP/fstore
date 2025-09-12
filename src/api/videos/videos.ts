@@ -4,11 +4,12 @@ import { randomBytes } from 'crypto';
 import path from 'path';
 
 import { rm } from "fs/promises";
-import { getBearerToken, validateJWT } from "../auth";
-import { type ApiConfig } from "../config";
-import { getVideo, updateVideo } from "../db/videos";
-import { BadRequestError, UserForbiddenError } from "./errors";
-import { respondWithJSON } from "./json";
+import { getBearerToken, validateJWT } from "../../auth";
+import { type ApiConfig } from "../../config";
+import { getVideo, updateVideo } from "../../db/videos";
+import { BadRequestError, UserForbiddenError } from "../errors";
+import { respondWithJSON } from "../json";
+import { createVideoForFastStart, getVideoMetada } from "./videos.helpers";
 
 export async function handlerUploadVideo(cfg: ApiConfig, req: BunRequest) {
   const { videoId } = req.params as { videoId?: string };
@@ -64,7 +65,6 @@ export async function handlerUploadVideo(cfg: ApiConfig, req: BunRequest) {
   const videoNameExt = await randomBytes(32).toString('base64url') + `-${testRequirementInUrl}`
 
 
-
   const fileNameExt = `${videoNameExt}.${fileExtension}`
   const tmpVideoPath = path.join(cfg.assetsRoot, 'temp', fileNameExt)
 
@@ -75,7 +75,7 @@ export async function handlerUploadVideo(cfg: ApiConfig, req: BunRequest) {
   
   // Uploads file from disk to s3
   try {
-    const s3FilePath = `${aspectRatioLabel}/moov.${fileNameExt}`
+    const s3FilePath = `${aspectRatioLabel}/${fileNameExt}`
     let moovAtomTmpVideoPath = await createVideoForFastStart(tmpVideoPath)
 
     await S3Client.write(
@@ -93,9 +93,7 @@ export async function handlerUploadVideo(cfg: ApiConfig, req: BunRequest) {
     console.warn(e)
   }
 
-  
-
-  const localS33Url = `${cfg.s3Endpoint}/${cfg.s3Bucket}/${aspectRatioLabel}/moov.${fileNameExt}`
+  const localS33Url = `${cfg.s3Endpoint}/${cfg.s3Bucket}/${aspectRatioLabel}/${fileNameExt}`
 
 
   // Video URL updated
@@ -110,60 +108,4 @@ export async function handlerUploadVideo(cfg: ApiConfig, req: BunRequest) {
   return respondWithJSON(200, {
     video: videoUpdates
   });
-}
-
-export async function getVideoMetada(filepath: string){
-  // Create process for metadata
-  const ffprobeProcess = Bun.spawn({
-    cmd: ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height", "-of", "json", filepath],
-    stdout: "pipe",
-    stderr: "pipe"
-  })
-
-  const outputData = await new Response(ffprobeProcess.stdout).json();
-  const errorText = await new Response(ffprobeProcess.stderr).text();
-  const processExitCode = await ffprobeProcess.exited;
-
-  if(processExitCode !== 0 ){
-    console.error(`[ FFProbe ] Spawned process error.\n${errorText}`) 
-  }
-
-  // Gets hight and width
-  const height = outputData.streams[0].height
-  const width = outputData.streams[0].width
-
-  // Calculate ratio
-  const ratioValue = Number(width/height).toPrecision(3)
-
-  // Resolve aspect ratio
-  const is16_9 = Number(16/9).toPrecision(3) === ratioValue
-  const is9_16 = Number(9/16).toPrecision(3) === ratioValue
-  const storageName = is16_9
-    ? 'landscape'
-    : is9_16
-      ? 'portrait' : 'other';
-
-  return storageName
-}
-
-
-
-export async function createVideoForFastStart(absVideoPath: string) {
-  const fastStartTmpPath = absVideoPath.replace('.mp4', '.processed.mp4')
-
-  // Create process fo moov atom file
-  const videoProcess = Bun.spawn({
-    cmd: ["ffmpeg", "-i", absVideoPath, "-movflags", "+faststart", "-map_metadata", "0", "-codec", "copy", "-f", "mp4", fastStartTmpPath ],
-    stdout: 'pipe', 
-    stderr: 'pipe'
-  })
-
-  
-  const processExited = await videoProcess.exited
-  if( processExited !== 0){
-    const errorText = await new Response(videoProcess.stderr).text();
-    console.error(`[ FFProbe ] Spawned process error.\n${errorText}`) 
-  }
-
-  return fastStartTmpPath
 }

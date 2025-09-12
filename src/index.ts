@@ -12,7 +12,7 @@ import {
   handlerVideoMetaDelete,
   handlerVideosRetrieve,
 } from "./api/video-meta";
-import { handlerUploadVideo } from "./api/videos";
+import { handlerUploadVideo } from "./api/videos/videos";
 import { handlerUploadThumbnail } from "./api/thumbnails";
 import { handlerReset } from "./api/reset";
 import { ensureAssetsDir } from "./api/assets";
