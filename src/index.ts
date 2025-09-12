@@ -88,7 +88,6 @@ console.info( `
 
 `);
 
-
 async function serveStaticFile(relativePath: string, basePath: string) {
   const filePath = `${basePath}/${relativePath}`;
 
