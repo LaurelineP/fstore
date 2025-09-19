@@ -1,4 +1,7 @@
+import { S3Client } from "bun";
 import { spawnPipedFileProcess } from "./video.utils";
+import type { ApiConfig } from "../../config";
+import type { Video } from "../../db/videos";
 
 export async function getVideoMetada(filepath: string){
   // Create process for metadata
@@ -35,4 +38,24 @@ export async function createVideoForFastStart(absVideoPath: string) {
   )
 
   return fastStartTmpPath
+}
+
+
+export function generatePresignedS3URL(cfg: ApiConfig, key: string, expireTime: number = 3000) {
+  const presignedURL = S3Client.presign(key, {
+    endpoint: cfg.s3Endpoint,
+    expiresIn: expireTime,
+    bucket: cfg.s3Bucket
+  })
+  return presignedURL
+}
+
+// Aka. dbVideoToSignedVideo
+export function signDBVideo (cfg: ApiConfig, video: Video){ 
+  if( !video?.videoURL ) return video
+  const presigned = generatePresignedS3URL( cfg, video.videoURL )
+  return {
+    ...video,
+    videoURL: presigned,
+  } as Video
 }

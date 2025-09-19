@@ -1,8 +1,10 @@
-import { type ApiConfig } from "../config";
 import { getBearerToken, validateJWT } from "../auth";
 import { createVideo, deleteVideo, getVideo, getVideos } from "../db/videos";
-import { respondWithJSON } from "./json";
 import { BadRequestError, NotFoundError, UserForbiddenError } from "./errors";
+import { respondWithJSON } from "./json";
+import { signDBVideo } from "./videos/videos.helpers";
+
+import { type ApiConfig } from "../config";
 import type { BunRequest } from "bun";
 
 export async function handlerVideoMetaCreate(cfg: ApiConfig, req: Request) {
@@ -55,7 +57,8 @@ export async function handlerVideoGet(cfg: ApiConfig, req: BunRequest) {
     throw new NotFoundError("Couldn't find video");
   }
 
-  return respondWithJSON(200, video);
+  const presignedVideo = await signDBVideo(cfg, video)
+  return respondWithJSON(200, presignedVideo);
 }
 
 export async function handlerVideosRetrieve(cfg: ApiConfig, req: Request) {
@@ -63,5 +66,7 @@ export async function handlerVideosRetrieve(cfg: ApiConfig, req: Request) {
   const userID = validateJWT(token, cfg.jwtSecret);
 
   const videos = getVideos(cfg.db, userID);
-  return respondWithJSON(200, videos);
+  const presignedVideos = videos.map( video => signDBVideo(cfg, video))
+
+  return respondWithJSON(200, presignedVideos);
 }

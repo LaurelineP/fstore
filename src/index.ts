@@ -79,6 +79,7 @@ console.info( `
   
 
   [ MODE ]          "${cfg.mode}"
+  [ ENV FILE ]      Env file used:         ".env.${cfg.mode}"
   [ SERVER ]        Server running at:     http://localhost:${cfg.port}
   [ CLOUD SERVER ]  Cloud served from:     ${cfg.s3Endpoint}
   
