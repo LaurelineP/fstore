@@ -1,4 +1,8 @@
 #!/bin/sh
+source ./dev/utils.sh
+source ./dev/app-data.sh
+
+
 
 # USING LOCALSTACK
 #       Localstack is a cloud emulator allowing to use Cloud Services Locally
@@ -15,44 +19,109 @@
 #             - either using the LocalStack Desktop ( where the container is exposed with the LocalStack Desktop Application )
 #           - Bearer to set in the Authorization header for the consumption of the APIs 
 #             - Update your BEARER_TOKEN if needed / Leave the BEARER_AUTHORIZATION as it
-BEARER_TOKEN=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ0dWJlbHktYWNjZXNzIiwic3ViIjoiMmUzNWViMDktMThlMi00ZmIwLTgyNWMtODRmOWFkM2VlMzUxIiwiaWF0IjoxNzU3MTc2NzIwLCJleHAiOjQzNDkxNzY3MjB9.7rM6GL0lgAtqV8F0ZpNjlKqHnMOHjYl_TayY0nnsBCw
+BEARER_TOKEN=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ0dWJlbHktYWNjZXNzIiwic3ViIjoiMmUzNWViMDktMThlMi00ZmIwLTgyNWMtODRmOWFkM2VlMzUxIiwiaWF0IjoxNzU3NjM4MzAyLCJleHAiOjQzNDk2MzgzMDJ9.jBFRdx6MFrCv5ClepzznhsN0Ueii4eu60TxSl5kf064
+S3_BUCKET_NAME="tubely-private-000042"
 
+# ------------------------------- UNCHEAGEABLES ------------------------------ #
 
-# ----------------------- SCRIPT BASIC SCRIPT VARIABLES ---------------------- #
+# AWS - configuration related
+IAM_USERNAME="localstack-user"
+
+# Web application - credential details
+EMAIL="admin@tubely.com"
+PASSWORD="password"
+
+# Web application - server related
+APP_SERVER="http://localhost:8091"
 BEARER_AUTHORIZATION="Authorization: Bearer $BEARER_TOKEN"
+
+# Script context relateds
 SCRIPT_DIR="$(pwd)"
-APP_SERVER=http://localhost:8091
+
 
 
 
 # ---------------------------------------------------------------------------- #
-#                                 STORAGE SETUP                                #
+#                                 TOOLS LOADING                                #
 # ---------------------------------------------------------------------------- #
-# 1. Ensures to use aws command with the aws-shim (wrapper to run aws with local cloud emulator)
-source ./dev/.envrc
 
-# 2. Creates a S3 bucket (here called "tubely-000042")
+# 1. Use "aws-shim" command when "aws" is executed ( "aws" with arguments "endpoint-url" & profile )
+if ! command -v aws | grep -q 'aws-shim'; then
+    source ./dev/.envrc
+fi
+log "[ AWS-SHIM ] Command \"aws\" correctly pointing to \"aws-shim\"."
+
+
+
+# ---------------------------------------------------------------------------- #
+#                           EXPECTED REQUIREMENTS AWS                          #
+# ---------------------------------------------------------------------------- #
+# Users, Roles, Permissions and Policies, Groups, Buckers ...
+
+
+# 1. IAM User 
+if ! aws iam list-users --no-cli-pager | grep -q $IAM_USERNAME; then
+    aws iam create-user --user-name localstack-user
+fi
+log "[ IAM - USER ] Using AWS with IAM User \"$IAM_USERNAME\"."
+
+# 2. Sets S3 bucket to used if does not exist
 BUCKET_S3_LS=$(aws s3 ls)
 if [ -z "$BUCKET_S3_LS" ]; then
-    echo "  • Bucket creation..."
-    aws s3 mb tubely-000042 2>/dev/null || echo "  • Bucket already setup"
-else
-    echo "  • Existing bucket(s): $BUCKET_S3_LS, skipping bucket creation.\n"
+    log "[ S3 ] Bucket creation..."
+    aws s3 mb "$S3_BUCKET_NAME"
 fi
+log "[ S3 ] Bucket \"$S3_BUCKET_NAME\" in use."
 
 
-# ---------------------------------------------------------------------------- #
-#                           DATA PROVISIONNING SETUP                           #
-# ---------------------------------------------------------------------------- #
-# 3. Provision your DB with the first Object Storage set in the app development
-# Note: "jq -r" will print out in a pretty way the JSON response 
-# curl -X GET "$APP_SERVER/api/videos"
+# # 3. Group
+# aws create-group --group-name=managers
+if ! aws iam list-groups --no-cli-pager | grep -q "managers"; then
+    aws iam create-group --group-name "managers"
+fi
+log "[ IAM - GROUP ] Group \"managers\" in use."
 
-echo "  • Posting a video to store in bucket: $BUCKET_S3_LS.\n"
+# 4. Set Group policy
+aws iam attach-group-policy --group-name managers --policy-arn arn:aws:iam::aws:policy/AdministratorAccess --no-cli-pager
+log "[ AWS - GROUPS ] Group Manager policy available:"
 
-CURRENT_VIDEO_ID="df654618-23c5-48a4-886b-bb15bcdab413"
-# Posting video mp4
-curl -X POST "$APP_SERVER/api/video_upload/$CURRENT_VIDEO_ID" \
-    --header "$BEARER_AUTHORIZATION" \
-    -F "video=@$SCRIPT_DIR/samples/boots-video-vertical.mp4" \
-    | jq -r
+
+
+# 5. Attaches User to Group Policy
+
+# 6. Upload a video
+
+# Provide first video
+get_videos \
+    "$APP_SERVER/api/videos"  \
+    "$BEARER_AUTHORIZATION" \
+
+create_video \
+    "$APP_SERVER/api/videos"  \
+    "$BEARER_AUTHORIZATION" \
+    "Video test" \
+    "Video from shell script" \
+
+
+# TODO: Set upload_video_thumbnail
+# TODO: Set upload_video_file
+
+# # Roles
+
+# # ---------------------------------------------------------------------------- #
+# #                           DATA PROVISIONNING SETUP                           #
+# # ---------------------------------------------------------------------------- #
+# # Current Data state
+# # 3. Provision the DB with the first Object Storage set in the app development
+# # Note: "jq -r" will print out in a pretty way the JSON response 
+# # curl -X GET "$APP_SERVER/api/videos"
+
+# echo "  • Posting a video to store in bucket: $BUCKET_S3_LS.\n"
+
+# TODO: Use upload video shell function
+# CURRENT_VIDEO_ID="df654618-23c5-48a4-886b-bb15bcdab413"
+# # Posting video mp4
+# curl -X POST "$APP_SERVER/api/video_upload/$CURRENT_VIDEO_ID" \
+#     --header "$BEARER_AUTHORIZATION" \
+#     -F "video=@$SCRIPT_DIR/samples/boots-video-vertical.mp4" \
+#     | jq -r
