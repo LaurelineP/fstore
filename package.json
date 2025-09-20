@@ -4,8 +4,8 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "bun --env-file=.env src/index.ts",
-    "dev:local": "source ./dev/.envrc && bun --env-file=.env.local src/index.ts"
+    "dev": "source ./dev/.envrc regular && bun --env-file=.env src/index.ts",
+    "dev:local": "source ./dev/.envrc local && bun --env-file=.env.local src/index.ts"
   },
   "devDependencies": {
     "@types/bcrypt": "^5.0.2",
