@@ -56,7 +56,7 @@ export function errorHandlingMiddleware(
     if (cfg.platform === "dev") {
       message = errStr;
     }
-    console.log(errStr);
+    console.error(errStr);
   }
 
   return respondWithJSON(statusCode, { error: message });

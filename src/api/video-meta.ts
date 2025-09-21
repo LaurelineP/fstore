@@ -2,10 +2,10 @@ import { getBearerToken, validateJWT } from "../auth";
 import { createVideo, deleteVideo, getVideo, getVideos } from "../db/videos";
 import { BadRequestError, NotFoundError, UserForbiddenError } from "./errors";
 import { respondWithJSON } from "./json";
-import { signDBVideo } from "./videos/videos.helpers";
 
 import { type ApiConfig } from "../config";
 import type { BunRequest } from "bun";
+import { signDBVideo } from "../s3";
 
 export async function handlerVideoMetaCreate(cfg: ApiConfig, req: Request) {
   const token = getBearerToken(req.headers);
@@ -66,7 +66,7 @@ export async function handlerVideosRetrieve(cfg: ApiConfig, req: Request) {
   const userID = validateJWT(token, cfg.jwtSecret);
 
   const videos = getVideos(cfg.db, userID);
-  const presignedVideos = videos.map( video => signDBVideo(cfg, video))
+  const presignedVideos = await Promise.all(videos.map( async video => await signDBVideo(cfg, video)))
 
   return respondWithJSON(200, presignedVideos);
 }
