@@ -97,7 +97,6 @@ export async function handlerUploadVideo(cfg: ApiConfig, req: BunRequest) {
   try {
     const s3FilePath = `${aspectRatioLabel}/${fileNameExt}`
     let moovAtomTmpVideoPath = await createVideoForFastStart(tmpVideoPath)
-    const videoFile =  Bun.file(moovAtomTmpVideoPath)
     await uploadToS3( cfg, s3FilePath, moovAtomTmpVideoPath, 'video/mp4' )
 
     .finally(async() => {

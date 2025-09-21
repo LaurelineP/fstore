@@ -16,8 +16,6 @@ export type ApiConfig = {
   port: string;
   s3Client: S3Client;
   mode: string;
-  awsAccessKeyId: string;
-  awsSecretAccessKey: string;
 };
 
 const pathToDB = envOrThrow("DB_PATH");
@@ -45,8 +43,6 @@ export const cfg: ApiConfig = {
   port: port,
   s3Client: s3,
   mode: mode,
-  awsAccessKeyId: awsAccessKeyId,
-  awsSecretAccessKey: awsSecretAccessKey
 };
 console.log('s3:', s3)
 
