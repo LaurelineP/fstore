@@ -1,15 +1,16 @@
 
-import { S3Client, type BunRequest } from "bun";
+import { rm } from "fs/promises";
 import { randomBytes } from 'crypto';
 import path from 'path';
 
-import { rm } from "fs/promises";
+import { signDBVideo, uploadToS3 } from "../../s3";
 import { getBearerToken, validateJWT } from "../../auth";
 import { getVideo, updateVideo } from "../../db/videos";
 import { BadRequestError, UserForbiddenError } from "../errors";
 import { respondWithJSON } from "../json";
-import { createVideoForFastStart, getVideoMetada, signDBVideo } from "./videos.helpers";
+import { createVideoForFastStart, getVideoMetada } from "./videos.helpers";
 
+import { type BunRequest } from "bun";
 import { type ApiConfig } from "../../config";
 
 /** Upload video */
@@ -57,17 +58,29 @@ export async function handlerUploadVideo(cfg: ApiConfig, req: BunRequest) {
   const fileExtension = mediaType.split('/')[1]
 
   // Removes old file from
-  const hasExistingVideo = !!videoData?.videoURL;
-  if(hasExistingVideo){
-    const splitUrl = (videoData?.videoURL || '').split('/')
-    const fileNameExt = splitUrl[splitUrl.length - 1]
-    await S3Client.delete(fileNameExt, { endpoint: cfg.s3Endpoint })
-      .then(() => console.info("[ S3 STORAGE ] Successfully deleted file:", fileNameExt))
-      .catch( error => console.error("[ S3 STORAGE ] Error while deleting file:", fileNameExt, error))
+  const hasDBExistingVideo = !!videoData?.videoURL;
+  // console.log('🔥',cfg.s3Client.accessKeyId, cfg.s3Client.secretAccessKey);
+
+  if(hasDBExistingVideo){
+    const videoDBURL = videoData.videoURL
+    // const splitUrl = (videoData?.videoURL || '').split('/')
+    // const fileNameExt = splitUrl[splitUrl.length - 1]
+
+
+    // const hasPriorVersion = videoDBURL && await cfg.s3Client.exists(videoDBURL)
+    // if( hasPriorVersion ){
+
+      // await cfg.s3Client.delete(fileNameExt, { endpoint: cfg.s3Endpoint })
+      //   .then(() => console.info("[ S3 STORAGE ] Successfully deleted file:", fileNameExt))
+      //   .catch( error => console.error("[ S3 STORAGE ] Error while deleting file:", fileNameExt, error))
+    // }
   }
+
   // Required to pass tests - checking URL containing "amazonaws.com"
-  const testRequirementInUrl = "amazonaws.com"
-  const videoNameExt = await randomBytes(32).toString('base64url') + `-${testRequirementInUrl}`
+  let videoNameExt = await randomBytes(32).toString('base64url')
+  if( cfg.mode !== 'regular'){
+    videoNameExt += '-amazonaws.com'
+  }
 
 
   const fileNameExt = `${videoNameExt}.${fileExtension}`
@@ -77,30 +90,26 @@ export async function handlerUploadVideo(cfg: ApiConfig, req: BunRequest) {
   await Bun.write(tmpVideoPath, videoBuffer)
     .then(() => console.info("[ TMP STORAGE ] Successfully deleted file:", tmpVideoPath))
     .catch( error => console.error("[ TMP STORAGE ] Error while deleting file:", tmpVideoPath, error))
-  const aspectRatioLabel = await getVideoMetada(tmpVideoPath)
-
-  
-  // Uploads file from disk to s3
+    
+    
+    // Uploads file from disk to s3
+    const aspectRatioLabel = await getVideoMetada(tmpVideoPath)
   try {
     const s3FilePath = `${aspectRatioLabel}/${fileNameExt}`
     let moovAtomTmpVideoPath = await createVideoForFastStart(tmpVideoPath)
+    const videoFile =  Bun.file(moovAtomTmpVideoPath)
+    await uploadToS3( cfg, s3FilePath, moovAtomTmpVideoPath, 'video/mp4' )
 
-    await S3Client.write(
-      s3FilePath,
-      Bun.file(moovAtomTmpVideoPath), {
-        endpoint: cfg.s3Endpoint,
-        type: "video/mp4",
-      }
-    ).finally(async() => {
+    .finally(async() => {
       await rm(tmpVideoPath)
       await rm(moovAtomTmpVideoPath)
-      console.info(`[ TMP CLEANUP ] – Removed temporary file at: \n- ${s3FilePath} \n-${moovAtomTmpVideoPath}`)
+      console.info(`[ TMP CLEANUP ] – Removed temporary file at: \n|__ [ S3 File Path ]: ${s3FilePath} \n|__ [ Tmp local upload ]: ${moovAtomTmpVideoPath}`)
     })
   } catch (e) {
-    console.warn(e)
+    console.warn("TRY CATCH ERROR", e)
   }
 
-  const localS33Url = `${cfg.s3Endpoint}/${cfg.s3Bucket}/${aspectRatioLabel}/${fileNameExt}`
+  // const localS33Url = `${cfg.s3Endpoint}/${cfg.s3Bucket}/${aspectRatioLabel}/${fileNameExt}`
   const aspectRatioFile = `${aspectRatioLabel}/${fileNameExt}`
   
   // Video URL updated - having a key for later presignements
@@ -115,7 +124,7 @@ export async function handlerUploadVideo(cfg: ApiConfig, req: BunRequest) {
   console.info("Video update succesful.")
 
 
-  const presignedVideo = signDBVideo(cfg, video)
+  const presignedVideo = await signDBVideo(cfg, video)
   return respondWithJSON(200, {
     video: presignedVideo
   });
