@@ -87,7 +87,7 @@ log "[ AWS - GROUPS ] Group Manager policy available:"
 
 
 
-# 5. Attaches User to Group Policy
+# 5. TODO: Attaches User to Group Policy
 
 # 6. Upload a video
 
@@ -102,26 +102,3 @@ create_video \
     "Video test" \
     "Video from shell script" \
 
-
-# TODO: Set upload_video_thumbnail
-# TODO: Set upload_video_file
-
-# # Roles
-
-# # ---------------------------------------------------------------------------- #
-# #                           DATA PROVISIONNING SETUP                           #
-# # ---------------------------------------------------------------------------- #
-# # Current Data state
-# # 3. Provision the DB with the first Object Storage set in the app development
-# # Note: "jq -r" will print out in a pretty way the JSON response 
-# # curl -X GET "$APP_SERVER/api/videos"
-
-# echo "  • Posting a video to store in bucket: $BUCKET_S3_LS.\n"
-
-# TODO: Use upload video shell function
-# CURRENT_VIDEO_ID="df654618-23c5-48a4-886b-bb15bcdab413"
-# # Posting video mp4
-# curl -X POST "$APP_SERVER/api/video_upload/$CURRENT_VIDEO_ID" \
-#     --header "$BEARER_AUTHORIZATION" \
-#     -F "video=@$SCRIPT_DIR/samples/boots-video-vertical.mp4" \
-#     | jq -r

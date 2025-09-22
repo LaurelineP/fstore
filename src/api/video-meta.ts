@@ -72,7 +72,5 @@ export async function handlerVideosRetrieve(cfg: ApiConfig, req: Request) {
     videoURL: buildDistributed(cfg, v?.videoURL || '')
   }))
 
-
-  console.log('distributedVideos:', distributedVideos)
   return respondWithJSON(200,  distributedVideos);
 }
