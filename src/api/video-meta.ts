@@ -5,7 +5,7 @@ import { respondWithJSON } from "./json";
 
 import { type ApiConfig } from "../config";
 import type { BunRequest } from "bun";
-import { signDBVideo } from "../s3";
+import { buildDistributed } from "../s3";
 
 export async function handlerVideoMetaCreate(cfg: ApiConfig, req: Request) {
   const token = getBearerToken(req.headers);
@@ -53,12 +53,13 @@ export async function handlerVideoGet(cfg: ApiConfig, req: BunRequest) {
   }
 
   const video = getVideo(cfg.db, videoId);
-  if (!video) {
+  if (!video || !video.videoURL) {
     throw new NotFoundError("Couldn't find video");
   }
-
-  const presignedVideo = await signDBVideo(cfg, video)
-  return respondWithJSON(200, presignedVideo);
+  
+  const distributedVideoUrl = buildDistributed(cfg, video.videoURL)
+  video.videoURL = distributedVideoUrl
+  return respondWithJSON(200, video);
 }
 
 export async function handlerVideosRetrieve(cfg: ApiConfig, req: Request) {
@@ -66,7 +67,12 @@ export async function handlerVideosRetrieve(cfg: ApiConfig, req: Request) {
   const userID = validateJWT(token, cfg.jwtSecret);
 
   const videos = getVideos(cfg.db, userID);
-  const presignedVideos = await Promise.all(videos.map( async video => await signDBVideo(cfg, video)))
+  const distributedVideos = videos.map( v => ({
+    ...v,
+    videoURL: buildDistributed(cfg, v?.videoURL || '')
+  }))
 
-  return respondWithJSON(200, presignedVideos);
+
+  console.log('distributedVideos:', distributedVideos)
+  return respondWithJSON(200,  distributedVideos);
 }

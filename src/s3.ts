@@ -46,3 +46,9 @@ export async function signDBVideo (cfg: ApiConfig, video: Video){
   video.videoURL = presigned
   return video
 }
+
+
+export function buildDistributed (cfg: ApiConfig, videoKey: string ){
+  const distributedVideoURL = `${cfg.s3CfDistribution}/${videoKey}`
+  return distributedVideoURL
+}

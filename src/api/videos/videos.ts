@@ -3,7 +3,7 @@ import { rm } from "fs/promises";
 import { randomBytes } from 'crypto';
 import path from 'path';
 
-import { signDBVideo, uploadToS3 } from "../../s3";
+import { buildDistributed, deleteObjectInS3, uploadToS3 } from "../../s3";
 import { getBearerToken, validateJWT } from "../../auth";
 import { getVideo, updateVideo } from "../../db/videos";
 import { BadRequestError, UserForbiddenError } from "../errors";
@@ -63,17 +63,12 @@ export async function handlerUploadVideo(cfg: ApiConfig, req: BunRequest) {
 
   if(hasDBExistingVideo){
     const videoDBURL = videoData.videoURL
-    // const splitUrl = (videoData?.videoURL || '').split('/')
-    // const fileNameExt = splitUrl[splitUrl.length - 1]
-
-
-    // const hasPriorVersion = videoDBURL && await cfg.s3Client.exists(videoDBURL)
-    // if( hasPriorVersion ){
-
-      // await cfg.s3Client.delete(fileNameExt, { endpoint: cfg.s3Endpoint })
-      //   .then(() => console.info("[ S3 STORAGE ] Successfully deleted file:", fileNameExt))
-      //   .catch( error => console.error("[ S3 STORAGE ] Error while deleting file:", fileNameExt, error))
-    // }
+    console.log('videoDBURL:', videoDBURL)
+    try {
+      videoDBURL && await deleteObjectInS3(cfg, videoDBURL)
+    } catch( error ){
+      console.error("[ UPLOAD ] Delete Former Object", error)
+    }
   }
 
   // Required to pass tests - checking URL containing "amazonaws.com"
@@ -98,7 +93,6 @@ export async function handlerUploadVideo(cfg: ApiConfig, req: BunRequest) {
     const s3FilePath = `${aspectRatioLabel}/${fileNameExt}`
     let moovAtomTmpVideoPath = await createVideoForFastStart(tmpVideoPath)
     await uploadToS3( cfg, s3FilePath, moovAtomTmpVideoPath, 'video/mp4' )
-
     .finally(async() => {
       await rm(tmpVideoPath)
       await rm(moovAtomTmpVideoPath)
@@ -107,9 +101,8 @@ export async function handlerUploadVideo(cfg: ApiConfig, req: BunRequest) {
   } catch (e) {
     console.warn("TRY CATCH ERROR", e)
   }
-
-  // const localS33Url = `${cfg.s3Endpoint}/${cfg.s3Bucket}/${aspectRatioLabel}/${fileNameExt}`
   const aspectRatioFile = `${aspectRatioLabel}/${fileNameExt}`
+  console.log('aspectRatioFile:', aspectRatioFile)
   
   // Video URL updated - having a key for later presignements
   const video = {
@@ -122,9 +115,7 @@ export async function handlerUploadVideo(cfg: ApiConfig, req: BunRequest) {
   await updateVideo(cfg.db, video)
   console.info("Video update succesful.")
 
-
-  const presignedVideo = await signDBVideo(cfg, video)
   return respondWithJSON(200, {
-    video: presignedVideo
+    video: buildDistributed(cfg, aspectRatioFile)
   });
 }
